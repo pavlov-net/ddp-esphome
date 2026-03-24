@@ -184,7 +184,7 @@ static void log_stream_line_(const char *label,
 }
 
 // map format string -> ("fmt" field, pixcfg byte). For "rgb565" without endian,
-// we borrow endianness from the sink's LVGL (preferred_ddp_pixcfg()).
+// use platform byte order (LVGL 9 removed LV_COLOR_16_SWAP; canvas uses native order).
 static inline std::pair<std::string,uint8_t>
 resolve_fmt_and_pixcfg_(const std::string &fmt_in, ddp::DdpComponent *ddp) {
   std::string f = fmt_in;
@@ -198,7 +198,7 @@ resolve_fmt_and_pixcfg_(const std::string &fmt_in, ddp::DdpComponent *ddp) {
   if (f == "rgbw")
     return { "rgbw", ddp::DDP_PIXCFG_RGBW };
   if (f == "rgb565") {
-#if defined(LV_COLOR_16_SWAP) && LV_COLOR_16_SWAP
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     return { "rgb565be", ddp::DDP_PIXCFG_RGB565_BE };
 #else
     return { "rgb565le", ddp::DDP_PIXCFG_RGB565_LE };
