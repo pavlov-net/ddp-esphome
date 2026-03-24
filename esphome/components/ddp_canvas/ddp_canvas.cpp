@@ -96,30 +96,24 @@ void DdpCanvas::on_data(size_t offset_px, const uint8_t* pixels,
 #if LV_COLOR_DEPTH == 16
   uint16_t* dst = dst_buf + offset_px;
 
-  // LVGL 9 removed LV_COLOR_16_SWAP; canvas buffers use native byte order.
-  // Display drivers handle any byte swapping needed for hardware.
-  constexpr bool swap_bytes = false;
-
   if (format == PixelFormat::RGB888) {
-    // RGB888 → RGB565 (with optional byte swap)
-    convert_rgb888_to_rgb565(dst, pixels, pixel_count, swap_bytes);
+    // RGB888 → native RGB565 (no byte swap: LVGL 9 canvas uses native byte order)
+    convert_rgb888_to_rgb565(dst, pixels, pixel_count, false);
 
   } else if (format == PixelFormat::RGB565_BE || format == PixelFormat::RGB565_LE) {
-    // RGB565 → RGB565 (byte swap if endianness mismatch)
-    const bool src_be = (format == PixelFormat::RGB565_BE);
-
-    if (src_be == swap_bytes) {
-      // Direct copy
+    // RGB565 → native RGB565
+    if (format == PixelFormat::RGB565_LE) {
+      // Source is LE (native on ESP32) — direct copy
       std::memcpy(dst, pixels, pixel_count * 2);
     } else {
-      // Copy + byte swap
+      // Source is BE — copy + byte swap to native LE
       std::memcpy(dst, pixels, pixel_count * 2);
       swap_rgb565_bytes(dst, pixel_count);
     }
 
   } else if (format == PixelFormat::RGBW) {
-    // RGBW → RGB565 (drop W channel, with optional byte swap)
-    convert_rgbw_to_rgb565(dst, pixels, pixel_count, swap_bytes);
+    // RGBW → native RGB565 (drop W channel)
+    convert_rgbw_to_rgb565(dst, pixels, pixel_count, false);
   }
 
 #elif LV_COLOR_DEPTH == 32
