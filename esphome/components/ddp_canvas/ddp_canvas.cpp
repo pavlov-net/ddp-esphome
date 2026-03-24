@@ -16,7 +16,8 @@ namespace ddp {
 static const char* TAG = "ddp.canvas";
 
 // LVGL assertions
-static_assert(LV_COLOR_DEPTH == 16 || LV_COLOR_DEPTH == 32, "LV_COLOR_DEPTH must be 16 or 32");
+static_assert(LV_COLOR_DEPTH == 16 || LV_COLOR_DEPTH == 24 || LV_COLOR_DEPTH == 32,
+              "LV_COLOR_DEPTH must be 16, 24, or 32");
 static constexpr size_t BYTES_PER_PIXEL = LV_COLOR_DEPTH / 8;
 
 static const char* color_format_name(lv_color_format_t cf) {
@@ -114,6 +115,24 @@ void DdpCanvas::on_data(size_t offset_px, const uint8_t* pixels,
   } else if (format == PixelFormat::RGBW) {
     // RGBW → native RGB565 (drop W channel)
     convert_rgbw_to_rgb565(dst, pixels, pixel_count, false);
+  }
+
+#elif LV_COLOR_DEPTH == 24
+  // LVGL 9 RGB888: lv_color_t is {blue, green, red} — BGR byte order
+  uint8_t* dst24 = reinterpret_cast<uint8_t*>(dst_buf) + offset_px * 3;
+
+  if (format == PixelFormat::RGB888) {
+    // RGB888 (R,G,B) → BGR888 (swap R↔B)
+    convert_rgb888_to_bgr888(dst24, pixels, pixel_count);
+
+  } else if (format == PixelFormat::RGB565_BE || format == PixelFormat::RGB565_LE) {
+    // RGB565 → BGR888 (expand + reorder)
+    const bool src_be = (format == PixelFormat::RGB565_BE);
+    convert_rgb565_to_bgr888(dst24, pixels, pixel_count, src_be);
+
+  } else if (format == PixelFormat::RGBW) {
+    // RGBW → BGR888 (drop W, swap R↔B)
+    convert_rgbw_to_bgr888(dst24, pixels, pixel_count);
   }
 
 #elif LV_COLOR_DEPTH == 32
