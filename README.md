@@ -1,7 +1,7 @@
 # ddp-esphome
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![ESPHome](https://img.shields.io/badge/ESPHome-2025.8-blue)](https://esphome.io/)
+[![ESPHome](https://img.shields.io/badge/ESPHome-2026.4+-blue)](https://esphome.io/)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-5.x-orange)](https://docs.espressif.com/projects/esp-idf/)
 
 ESPHome external components for streaming images/video to **LVGL** displays and **AddressableLight** LED strips via **DDP** (Distributed Display Protocol) over UDP.
@@ -18,7 +18,7 @@ This repository provides a modular set of ESPHome components:
 - **`ddp_light_effect`**: AddressableLight effect for RGB/RGBW LED strips
 - **`media_proxy_control`**: WebSocket client for orchestrating media playback (images, videos, etc.) via the [media-proxy server](https://github.com/stuartparmenter/media-proxy)
 
-> Tested with **ESPHome 2025.8** (ESP-IDF only). Arduino is **not** supported.
+> Requires **ESPHome 2026.4.0 or newer** (which bundles LVGL 9.5). ESP-IDF only — Arduino is **not** supported.
 
 > **Note:** Legacy components `ddp_stream` and `ws_ddp_control` were removed in v0.7.0. Users on these components should use **v0.6.1** or earlier, or migrate to the new modular architecture. See examples for migration guidance.
 
