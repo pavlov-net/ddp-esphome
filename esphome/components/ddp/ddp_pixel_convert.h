@@ -158,6 +158,80 @@ inline void convert_rgb888_to_rgb32(uint32_t *dst, const uint8_t *src, size_t pi
   }
 }
 
+// Convert RGB888 (R,G,B) to BGR888 (LVGL 24-bit mode: lv_color_t {blue, green, red})
+// Safe to call from UDP task (pure math, no allocations or API calls)
+//
+// dst: Destination buffer for BGR888 pixels (must be pre-allocated, 3 bytes per pixel)
+// src: Source RGB888 data (3 bytes per pixel: R, G, B)
+// pixel_count: Number of pixels to convert
+inline void convert_rgb888_to_bgr888(uint8_t *dst, const uint8_t *src, size_t pixel_count) noexcept {
+  if (!dst || !src)
+    return;
+
+  const uint8_t *sp = src;
+  uint8_t *dp = dst;
+
+  for (size_t i = 0; i < pixel_count; ++i) {
+    dp[0] = sp[2];  // B
+    dp[1] = sp[1];  // G
+    dp[2] = sp[0];  // R
+    sp += 3;
+    dp += 3;
+  }
+}
+
+// Convert RGB565 to BGR888 (LVGL 24-bit mode: lv_color_t {blue, green, red})
+// Safe to call from UDP task (pure math, no allocations or API calls)
+//
+// dst: Destination buffer for BGR888 pixels (must be pre-allocated, 3 bytes per pixel)
+// src: Source RGB565 data (2 bytes per pixel)
+// pixel_count: Number of pixels to convert
+// src_big_endian: If true, source is RGB565 big-endian; if false, little-endian
+inline void convert_rgb565_to_bgr888(uint8_t *dst, const uint8_t *src, size_t pixel_count, bool src_big_endian) noexcept {
+  if (!dst || !src)
+    return;
+
+  const uint8_t *sp = src;
+  uint8_t *dp = dst;
+
+  for (size_t i = 0; i < pixel_count; ++i) {
+    uint16_t v = src_big_endian ? (uint16_t)((sp[0] << 8) | sp[1])
+                                : (uint16_t)((sp[1] << 8) | sp[0]);
+    uint8_t r5 = (uint8_t)((v >> 11) & 0x1F);
+    uint8_t g6 = (uint8_t)((v >> 5) & 0x3F);
+    uint8_t b5 = (uint8_t)(v & 0x1F);
+
+    // Expand to 8-bit and store as BGR
+    dp[0] = (uint8_t)((b5 << 3) | (b5 >> 2));  // B
+    dp[1] = (uint8_t)((g6 << 2) | (g6 >> 4));  // G
+    dp[2] = (uint8_t)((r5 << 3) | (r5 >> 2));  // R
+    sp += 2;
+    dp += 3;
+  }
+}
+
+// Convert RGBW to BGR888 (LVGL 24-bit mode, drop W channel)
+// Safe to call from UDP task (pure math, no allocations or API calls)
+//
+// dst: Destination buffer for BGR888 pixels (must be pre-allocated, 3 bytes per pixel)
+// src: Source RGBW data (4 bytes per pixel: R, G, B, W)
+// pixel_count: Number of pixels to convert
+inline void convert_rgbw_to_bgr888(uint8_t *dst, const uint8_t *src, size_t pixel_count) noexcept {
+  if (!dst || !src)
+    return;
+
+  const uint8_t *sp = src;
+  uint8_t *dp = dst;
+
+  for (size_t i = 0; i < pixel_count; ++i) {
+    dp[0] = sp[2];  // B
+    dp[1] = sp[1];  // G
+    dp[2] = sp[0];  // R (W at sp[3] ignored)
+    sp += 4;
+    dp += 3;
+  }
+}
+
 // Convert RGBW to RGB565 (drop W channel) with optional byte swap
 // Safe to call from UDP task (pure math, no allocations or API calls)
 // Inline so it can be used across components without linkage issues

@@ -102,6 +102,7 @@ StopAction = media_proxy_ns.class_("StopAction", automation.Action)
             cv.Required(CONF_SRC): cv.templatable(cv.string),
         }
     ),
+    synchronous=True,
 )
 async def set_source_action_to_code(config, action_id, template_arg, args):
     output = await cg.get_variable(config[CONF_ID])
@@ -119,6 +120,7 @@ async def set_source_action_to_code(config, action_id, template_arg, args):
             cv.GenerateID(CONF_ID): cv.use_id(MediaProxyOutput),
         }
     ),
+    synchronous=True,
 )
 async def start_action_to_code(config, action_id, template_arg, args):
     output = await cg.get_variable(config[CONF_ID])
@@ -134,6 +136,7 @@ async def start_action_to_code(config, action_id, template_arg, args):
             cv.GenerateID(CONF_ID): cv.use_id(MediaProxyOutput),
         }
     ),
+    synchronous=True,
 )
 async def stop_action_to_code(config, action_id, template_arg, args):
     output = await cg.get_variable(config[CONF_ID])

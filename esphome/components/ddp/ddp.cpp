@@ -503,10 +503,8 @@ void DdpComponent::handle_push_(uint8_t stream_id, const DdpHeader* hdr) {
     this->enable_loop_soon_any_context();
   }
 
-  // Wake main loop immediately for low-latency frame presentation (ESPHome 2025.11+)
-#if defined(USE_SOCKET_SELECT_SUPPORT) && defined(USE_WAKE_LOOP_THREADSAFE)
+  // Wake main loop immediately for low-latency frame presentation
   App.wake_loop_threadsafe();
-#endif
 
 #if DDP_METRICS
   // Reset frame assembly state

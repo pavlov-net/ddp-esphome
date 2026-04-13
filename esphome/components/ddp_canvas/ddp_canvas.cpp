@@ -16,22 +16,26 @@ namespace ddp {
 static const char* TAG = "ddp.canvas";
 
 // LVGL assertions
-static_assert(LV_COLOR_DEPTH == 16 || LV_COLOR_DEPTH == 32, "LV_COLOR_DEPTH must be 16 or 32");
+static_assert(LV_COLOR_DEPTH == 16 || LV_COLOR_DEPTH == 24 || LV_COLOR_DEPTH == 32,
+              "LV_COLOR_DEPTH must be 16, 24, or 32");
 static constexpr size_t BYTES_PER_PIXEL = LV_COLOR_DEPTH / 8;
 
-static const char* img_cf_name(uint8_t cf) {
+static const char* color_format_name(lv_color_format_t cf) {
   switch (cf) {
-    case LV_IMG_CF_TRUE_COLOR:                  return "TRUE_COLOR";
-    case LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED:     return "TRUE_COLOR_CK";
-    case LV_IMG_CF_TRUE_COLOR_ALPHA:            return "TRUE_COLOR_ALPHA";
-    case LV_IMG_CF_INDEXED_1BIT:                return "INDEXED_1BIT";
-    case LV_IMG_CF_INDEXED_2BIT:                return "INDEXED_2BIT";
-    case LV_IMG_CF_INDEXED_4BIT:                return "INDEXED_4BIT";
-    case LV_IMG_CF_INDEXED_8BIT:                return "INDEXED_8BIT";
-    case LV_IMG_CF_ALPHA_1BIT:                  return "ALPHA_1BIT";
-    case LV_IMG_CF_ALPHA_2BIT:                  return "ALPHA_2BIT";
-    case LV_IMG_CF_ALPHA_4BIT:                  return "ALPHA_4BIT";
-    case LV_IMG_CF_ALPHA_8BIT:                  return "ALPHA_8BIT";
+    case LV_COLOR_FORMAT_RGB565:                return "RGB565";
+    case LV_COLOR_FORMAT_RGB888:                return "RGB888";
+    case LV_COLOR_FORMAT_ARGB8888:              return "ARGB8888";
+    case LV_COLOR_FORMAT_XRGB8888:              return "XRGB8888";
+    case LV_COLOR_FORMAT_ARGB8565:              return "ARGB8565";
+    case LV_COLOR_FORMAT_I1:                    return "I1";
+    case LV_COLOR_FORMAT_I2:                    return "I2";
+    case LV_COLOR_FORMAT_I4:                    return "I4";
+    case LV_COLOR_FORMAT_I8:                    return "I8";
+    case LV_COLOR_FORMAT_A1:                    return "A1";
+    case LV_COLOR_FORMAT_A2:                    return "A2";
+    case LV_COLOR_FORMAT_A4:                    return "A4";
+    case LV_COLOR_FORMAT_A8:                    return "A8";
+    case LV_COLOR_FORMAT_L8:                    return "L8";
     default:                                    return "UNKNOWN";
   }
 }
@@ -93,34 +97,42 @@ void DdpCanvas::on_data(size_t offset_px, const uint8_t* pixels,
 #if LV_COLOR_DEPTH == 16
   uint16_t* dst = dst_buf + offset_px;
 
-  // Determine byte swap requirement once (used by RGB888 and RGBW conversions)
-  constexpr bool swap_bytes =
-  #if defined(LV_COLOR_16_SWAP) && LV_COLOR_16_SWAP
-      true;
-  #else
-      false;
-  #endif
-
   if (format == PixelFormat::RGB888) {
-    // RGB888 → RGB565 (with optional byte swap)
-    convert_rgb888_to_rgb565(dst, pixels, pixel_count, swap_bytes);
+    // RGB888 → native RGB565 (no byte swap: LVGL 9 canvas uses native byte order)
+    convert_rgb888_to_rgb565(dst, pixels, pixel_count, false);
 
   } else if (format == PixelFormat::RGB565_BE || format == PixelFormat::RGB565_LE) {
-    // RGB565 → RGB565 (byte swap if endianness mismatch)
-    const bool src_be = (format == PixelFormat::RGB565_BE);
-
-    if (src_be == swap_bytes) {
-      // Direct copy
+    // RGB565 → native RGB565
+    if (format == PixelFormat::RGB565_LE) {
+      // Source is LE (native on ESP32) — direct copy
       std::memcpy(dst, pixels, pixel_count * 2);
     } else {
-      // Copy + byte swap
+      // Source is BE — copy + byte swap to native LE
       std::memcpy(dst, pixels, pixel_count * 2);
       swap_rgb565_bytes(dst, pixel_count);
     }
 
   } else if (format == PixelFormat::RGBW) {
-    // RGBW → RGB565 (drop W channel, with optional byte swap)
-    convert_rgbw_to_rgb565(dst, pixels, pixel_count, swap_bytes);
+    // RGBW → native RGB565 (drop W channel)
+    convert_rgbw_to_rgb565(dst, pixels, pixel_count, false);
+  }
+
+#elif LV_COLOR_DEPTH == 24
+  // LVGL 9 RGB888: lv_color_t is {blue, green, red} — BGR byte order
+  uint8_t* dst24 = reinterpret_cast<uint8_t*>(dst_buf) + offset_px * 3;
+
+  if (format == PixelFormat::RGB888) {
+    // RGB888 (R,G,B) → BGR888 (swap R↔B)
+    convert_rgb888_to_bgr888(dst24, pixels, pixel_count);
+
+  } else if (format == PixelFormat::RGB565_BE || format == PixelFormat::RGB565_LE) {
+    // RGB565 → BGR888 (expand + reorder)
+    const bool src_be = (format == PixelFormat::RGB565_BE);
+    convert_rgb565_to_bgr888(dst24, pixels, pixel_count, src_be);
+
+  } else if (format == PixelFormat::RGBW) {
+    // RGBW → BGR888 (drop W, swap R↔B)
+    convert_rgbw_to_bgr888(dst24, pixels, pixel_count);
   }
 
 #elif LV_COLOR_DEPTH == 32
@@ -360,26 +372,26 @@ void DdpCanvas::ensure_buffers_() {
   if (!canvas_) return;
 
   // Adopt the canvas' existing buffer as our front (owned by LVGL canvas)
-  auto* img = (lv_img_dsc_t*)lv_canvas_get_img(canvas_);
-  if (!img || !img->data || img->header.w <= 0 || img->header.h <= 0) {
+  auto* draw_buf = lv_canvas_get_draw_buf(canvas_);
+  if (!draw_buf || !draw_buf->data || draw_buf->header.w <= 0 || draw_buf->header.h <= 0) {
     // Canvas not fully initialized yet
     return;
   }
 
-  const size_t px = (size_t)img->header.w * (size_t)img->header.h;
+  const size_t px = (size_t)draw_buf->header.w * (size_t)draw_buf->header.h;
 
   // Log whenever the canvas buffer pointer changes or size changes
-  if (front_buf_ != (uint16_t*)img->data || buf_px_ != px) {
+  if (front_buf_ != (uint16_t*)draw_buf->data || buf_px_ != px) {
     ESP_LOGI(TAG,
-      "Using canvas buffer: cv=%p img=%p data=%p w=%d h=%d cf=%u(%s) LV_COLOR_DEPTH=%d buf_px(old=%u -> new=%u)",
-      (void*)canvas_, (void*)img, (void*)img->data,
-      (int)img->header.w, (int)img->header.h,
-      (unsigned)img->header.cf, img_cf_name(img->header.cf),
+      "Using canvas draw_buf: cv=%p buf=%p data=%p w=%d h=%d cf=%u(%s) LV_COLOR_DEPTH=%d buf_px(old=%u -> new=%u)",
+      (void*)canvas_, (void*)draw_buf, (void*)draw_buf->data,
+      (int)draw_buf->header.w, (int)draw_buf->header.h,
+      (unsigned)draw_buf->header.cf, color_format_name((lv_color_format_t)draw_buf->header.cf),
       (int)LV_COLOR_DEPTH,
       (unsigned)buf_px_, (unsigned)px);
   }
 
-  front_buf_ = (uint16_t*)img->data;
+  front_buf_ = (uint16_t*)draw_buf->data;
 
   // (Re)allocate only ready/accum when size changes
   if (buf_px_ != px) {
@@ -391,7 +403,7 @@ void DdpCanvas::ensure_buffers_() {
 
   // Allocate ready buffer (triple-buffer mode)
   if (back_buffers_ == 2 && !ready_buf_) {
-    ready_buf_ = static_cast<uint16_t*>(lv_mem_alloc(bytes));
+    ready_buf_ = static_cast<uint16_t*>(lv_malloc(bytes));
     if (!ready_buf_) {
       free_ready_accum_();
       buf_px_ = 0;
@@ -402,7 +414,7 @@ void DdpCanvas::ensure_buffers_() {
 
   // Allocate accum buffer (double or triple-buffer mode)
   if ((back_buffers_ >= 1) && !accum_buf_) {
-    accum_buf_ = static_cast<uint16_t*>(lv_mem_alloc(bytes));
+    accum_buf_ = static_cast<uint16_t*>(lv_malloc(bytes));
     if (!accum_buf_) {
       free_ready_accum_();
       buf_px_ = 0;
@@ -413,29 +425,29 @@ void DdpCanvas::ensure_buffers_() {
 
   // Free extra buffers if mode changed
   if (back_buffers_ < 2 && ready_buf_) {
-    lv_mem_free(ready_buf_);
+    lv_free(ready_buf_);
     ready_buf_ = nullptr;
   }
   if (back_buffers_ < 1 && accum_buf_) {
-    lv_mem_free(accum_buf_);
+    lv_free(accum_buf_);
     accum_buf_ = nullptr;
   }
 }
 
 void DdpCanvas::free_ready_accum_() {
   if (ready_buf_) {
-    lv_mem_free(ready_buf_);
+    lv_free(ready_buf_);
     ready_buf_ = nullptr;
   }
   if (accum_buf_) {
-    lv_mem_free(accum_buf_);
+    lv_free(accum_buf_);
     accum_buf_ = nullptr;
   }
   have_ready_.store(false);
 }
 
 void DdpCanvas::on_canvas_size_changed_(lv_event_t* e) {
-  auto* canvas = lv_event_get_target(e);
+  auto* canvas = lv_event_get_target_obj(e);
   auto* self = static_cast<DdpCanvas*>(lv_event_get_user_data(e));
   if (!self || !canvas || canvas != self->canvas_) return;
 

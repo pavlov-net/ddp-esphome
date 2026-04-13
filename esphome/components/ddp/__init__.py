@@ -86,14 +86,6 @@ async def to_code(config):
     if config[CONF_METRICS]:
         cg.add_build_flag("-DDDP_METRICS")
 
-    # Enable wake_loop_threadsafe for low-latency wakeup (ESPHome 2025.11+)
-    try:
-        from esphome.components import socket
-        socket.require_wake_loop_threadsafe()
-    except AttributeError:
-        # Backward compatibility: not available in older ESPHome
-        pass
-
 
 # Register ddp_light_effect as an addressable light effect
 @register_addressable_effect(
