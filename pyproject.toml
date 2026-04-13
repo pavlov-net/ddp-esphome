@@ -1,6 +1,6 @@
 [project]
 name = "ddp-esphome"
-version = "0.7.6"
+version = "0.8.1"
 description = "ESPHome external components for streaming images/video to LVGL displays and LED strips via DDP (Distributed Display Protocol)"
 readme = "README.md"
 requires-python = ">=3.11"
