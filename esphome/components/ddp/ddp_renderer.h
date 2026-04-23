@@ -75,6 +75,12 @@ class DdpRenderer {
   // Get renderer's name for logging
   virtual const char* get_name() const = 0;
 
+  // Optional: Called from DdpComponent::loop() on main thread
+  // Renderers can override to perform main-thread-only operations
+  // (e.g., LVGL invalidation for widgets)
+  // Default implementation does nothing
+  virtual void loop() {}
+
 #ifdef DDP_METRICS
   // Get renderer metrics (optional, returns nullptr if not implemented)
   // Called from main thread during metrics logging

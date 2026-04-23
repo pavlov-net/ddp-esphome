@@ -190,6 +190,13 @@ void DdpComponent::loop() {
   }
 #endif
 
+  // Call loop() on all renderers (for widgets that need main-thread service)
+  for (auto& kv : renderers_) {
+    for (auto* renderer : kv.second) {
+      renderer->loop();
+    }
+  }
+
   // Loop optimization: disable when idle for 1 second
   if (had_activity) {
     last_activity_us_ = esp_timer_get_time();
