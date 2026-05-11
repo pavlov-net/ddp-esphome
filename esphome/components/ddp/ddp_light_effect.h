@@ -3,6 +3,9 @@
 
 #pragma once
 
+// Only compile if light component is available
+#ifdef USE_LIGHT
+
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
 #include "esphome/components/light/addressable_light_effect.h"
@@ -56,3 +59,5 @@ class DdpLightEffect : public light::AddressableLightEffect, public DdpRenderer 
 
 }  // namespace ddp
 }  // namespace esphome
+
+#endif  // USE_LIGHT
