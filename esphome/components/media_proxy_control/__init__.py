@@ -5,6 +5,11 @@ from esphome import automation, codegen as cg, config_validation as cv
 from esphome.const import CONF_ID, CONF_URL
 from esphome.components.esp32 import add_idf_component
 
+try:
+    from esphome.components.esp32 import request_tls  # ESPHome 2026.10+
+except ImportError:
+    request_tls = None
+
 CODEOWNERS = ["@stuartparmenter"]
 DEPENDENCIES = ["network", "ddp", "ddp_canvas"]
 
@@ -217,4 +222,8 @@ async def to_code(config):
         cg.add(output.set_parent(var))
         cg.add(var.register_output(output, stream_id))
 
-    add_idf_component(name="espressif/esp_websocket_client", ref="1.5.0")
+    add_idf_component(name="espressif/esp_websocket_client", ref="^1.5.0")
+    # esp_websocket_client links esp_tls even for ws:// connections; ESPHome
+    # 2026.10+ compiles TLS out of mbedTLS unless a component requests it.
+    if request_tls is not None:
+        request_tls()
