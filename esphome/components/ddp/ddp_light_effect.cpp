@@ -4,6 +4,10 @@
 // Light effect renderer - renders DDP to AddressableLight strips
 
 #include "ddp_light_effect.h"
+
+// Only compile if light component is available
+#ifdef USE_LIGHT
+
 #include "esphome/components/ddp/ddp_pixel_convert.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
@@ -165,3 +169,5 @@ void DdpLightEffect::apply(light::AddressableLight& it, const Color& current_col
 
 }  // namespace ddp
 }  // namespace esphome
+
+#endif  // USE_LIGHT
