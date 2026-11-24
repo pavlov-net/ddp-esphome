@@ -20,6 +20,13 @@ static const char *TAG = "media_proxy_control";
 namespace esphome {
 namespace media_proxy_control {
 
+// Bounded wait for WebSocket text sends. These run on the main ESPHome loop,
+// so an unbounded wait would block it (and risk a task-watchdog reset) if the
+// TCP connection stalls. Control messages are small and re-sent on reconnect.
+// Note: esp_websocket_client_send_text returns 0, not a negative value, when
+// the transport write times out with no progress, so failure checks use <= 0.
+static constexpr TickType_t WS_SEND_TIMEOUT = pdMS_TO_TICKS(1000);
+
 // ----------------- MediaProxyOutput implementation -----------------
 
 void MediaProxyOutput::start() {
@@ -468,14 +475,18 @@ void MediaProxyControl::send_hello_() {
   snprintf(buf, sizeof(buf),
            "{\"type\":\"hello\",\"proto\":\"ddp-ws/1\",\"device_id\":\"%s\"}",
            dev.c_str());
-  esp_websocket_client_send_text(client_, buf, strlen(buf), portMAX_DELAY);
+  if (esp_websocket_client_send_text(client_, buf, strlen(buf), WS_SEND_TIMEOUT) <= 0) {
+    ESP_LOGW(TAG, "tx hello failed (ws send timeout/error)");
+    return;
+  }
   ESP_LOGI(TAG, "tx hello device_id=%s", dev.c_str());
 }
 
 void MediaProxyControl::send_text(const std::string &json_utf8) {
   if (!client_ || !running_.load()) return;
   if (json_utf8.empty()) return;
-  esp_websocket_client_send_text(client_, json_utf8.c_str(), json_utf8.length(), portMAX_DELAY);
+  if (esp_websocket_client_send_text(client_, json_utf8.c_str(), json_utf8.length(), WS_SEND_TIMEOUT) <= 0)
+    ESP_LOGW(TAG, "tx control message failed (ws send timeout/error)");
 }
 
 // ------------- orchestration API -------------
